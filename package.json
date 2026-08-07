@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node scripts/start.js"
   },
   "dependencies": {
     "dexie-react-hooks": "^4.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2"
+    "react-router-dom": "^7.18.2",
+    "serve": "^14.2.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
