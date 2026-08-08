@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { db, chaveProduto } from './db'
+import { api } from './api'
 
 // Importa saldo a partir de Excel/CSV exportado do ERP.
 // Colunas esperadas (nomes flexíveis, veja normalizeHeader): Filial, Codigo,
@@ -10,7 +10,7 @@ import { db, chaveProduto } from './db'
 
 function normalizeHeader(h) {
   return String(h)
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().trim()
 }
 
@@ -32,7 +32,7 @@ export async function importarSaldoDeArquivo(file) {
 
   if (rows.length === 0) throw new Error('Planilha vazia ou formato não reconhecido.')
 
-  const mapped = rows.map((row) => {
+  const linhas = rows.map((row) => {
     const out = {}
     for (const [key, val] of Object.entries(row)) {
       const norm = HEADER_MAP[normalizeHeader(key)]
@@ -41,33 +41,7 @@ export async function importarSaldoDeArquivo(file) {
     return out
   }).filter(r => r.codigo != null)
 
-  let inseridos = 0
-  let atualizados = 0
+  if (linhas.length === 0) throw new Error('Nenhuma linha com código de produto reconhecida.')
 
-  await db.transaction('rw', db.produtos, async () => {
-    for (const r of mapped) {
-      const codigo = String(r.codigo).trim()
-      const cor = String(r.cor ?? '0').trim()
-      const voltagem = String(r.voltagem ?? '0').trim()
-      const chave = chaveProduto(codigo, cor, voltagem)
-      const existente = await db.produtos.where('chave').equals(chave).first()
-      const dados = {
-        chave, codigo, cor, voltagem,
-        descricao: r.descricao ? String(r.descricao).trim() : (existente?.descricao || ''),
-        filial: r.filial != null ? String(r.filial).trim() : (existente?.filial || ''),
-        saldo: Number(r.saldo) || 0,
-        custoMedio: Number(r.custoMedio) || 0,
-        atualizadoEm: new Date().toISOString(),
-      }
-      if (existente) {
-        await db.produtos.update(existente.id, dados)
-        atualizados++
-      } else {
-        await db.produtos.add(dados)
-        inseridos++
-      }
-    }
-  })
-
-  return { total: mapped.length, inseridos, atualizados }
+  return api.importarProdutos(linhas)
 }

@@ -1,49 +1,50 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db, CAMPOS_MOVIMENTO, CATEGORIAS_DIVERGENCIA, calcularTotal, calcularDiferenca } from '../lib/db'
+import { api } from '../lib/api'
+import { CAMPOS_MOVIMENTO, CATEGORIAS_DIVERGENCIA, calcularTotal } from '../lib/db'
 import { exportarExcel, exportarPDF } from '../lib/exportSessao'
 
-function ItemRow({ item, produto }) {
+function ItemRow({ item, sessaoId, onAtualizado }) {
   const [local, setLocal] = useState(item)
+  const [salvando, setSalvando] = useState(false)
   const total = calcularTotal(local)
-  const diferenca = calcularDiferenca(local, produto?.saldo)
-  const divergente = diferenca !== 0
+  const diferenca = local.diferenca
+  const divergente = Number(diferenca) !== 0
 
   async function salvar(campo, valor) {
     const novo = { ...local, [campo]: valor }
-    const novoTotal = calcularTotal(novo)
-    const novaDiferenca = novoTotal - (produto?.saldo || 0)
-    novo.diferenca = novaDiferenca
-    if (novaDiferenca === 0) {
-      novo.statusDivergencia = 'ok'
-    } else if (novo.statusDivergencia === 'ok') {
-      novo.statusDivergencia = 'pendente'
-    }
     setLocal(novo)
-    await db.itens.update(item.id, novo)
+    setSalvando(true)
+    try {
+      const atualizado = await api.atualizarItem(sessaoId, item.id, { [campo]: valor })
+      setLocal(atualizado)
+      onAtualizado(atualizado)
+    } finally {
+      setSalvando(false)
+    }
   }
 
   return (
     <tr className={divergente ? 'bg-rose-950/40' : ''}>
       <td className="px-3 py-2 text-slate-300 whitespace-nowrap text-sm">
-        {produto?.codigo} <span className="text-slate-500">· {produto?.cor}/{produto?.voltagem}</span>
-        <div className="text-slate-400 text-xs truncate max-w-[220px]">{produto?.descricao}</div>
+        {local.codigo} <span className="text-slate-500">· {local.cor}/{local.voltagem}</span>
+        <div className="text-slate-400 text-xs truncate max-w-[220px]">{local.descricao}</div>
       </td>
       {CAMPOS_MOVIMENTO.map(c => (
         <td key={c.key} className="px-1 py-2">
           <input type="number" value={local[c.key] ?? 0}
             onChange={e => salvar(c.key, Number(e.target.value))}
+            disabled={salvando}
             className="w-16 bg-slate-800 border border-slate-700 rounded px-1 py-1 text-slate-100 text-sm" />
         </td>
       ))}
       <td className="px-3 py-2 text-center text-slate-200 font-medium">{total}</td>
-      <td className="px-3 py-2 text-center text-slate-400">{produto?.saldo ?? 0}</td>
+      <td className="px-3 py-2 text-center text-slate-400">{local.saldo ?? 0}</td>
       <td className={`px-3 py-2 text-center font-semibold ${divergente ? 'text-rose-400' : 'text-emerald-400'}`}>
         {diferenca}
       </td>
       <td className="px-2 py-2">
-        <select value={local.categoriaDivergencia || ''}
+        <select value={local.categoria_divergencia || ''}
           onChange={e => salvar('categoriaDivergencia', e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded px-1 py-1 text-xs text-slate-200">
           <option value="">—</option>
@@ -61,23 +62,36 @@ function ItemRow({ item, produto }) {
 
 export default function SessaoDetalhe() {
   const { id } = useParams()
-  const sessaoId = Number(id)
-  const sessao = useLiveQuery(() => db.sessoes.get(sessaoId), [sessaoId])
-  const itens = useLiveQuery(() => db.itens.where('sessaoId').equals(sessaoId).toArray(), [sessaoId])
-  const produtos = useLiveQuery(() => db.produtos.toArray(), [])
-  const produtoPorId = useMemo(() => Object.fromEntries((produtos || []).map(p => [p.id, p])), [produtos])
+  const [sessao, setSessao] = useState(null)
+  const [erro, setErro] = useState(null)
 
-  const pendentes = (itens || []).filter(i => i.diferenca !== 0 && !i.categoriaDivergencia)
+  const carregar = useCallback(() => {
+    api.obterSessao(id).then(setSessao).catch(err => setErro(err.message))
+  }, [id])
 
-  async function fecharSessao() {
-    if (pendentes.length > 0) {
-      alert(`Ainda há ${pendentes.length} item(ns) com divergência sem categoria. Classifique antes de fechar.`)
-      return
-    }
-    await db.sessoes.update(sessaoId, { status: 'fechada' })
+  useEffect(() => { carregar() }, [carregar])
+
+  function atualizarItemLocal(itemAtualizado) {
+    setSessao(s => ({
+      ...s,
+      itens: s.itens.map(i => i.id === itemAtualizado.id ? { ...i, ...itemAtualizado } : i),
+    }))
   }
 
-  if (!sessao || !itens) return <div className="p-6 text-slate-400">Carregando…</div>
+  async function fecharSessao() {
+    try {
+      const atualizada = await api.fecharSessao(id)
+      setSessao(s => ({ ...s, status: atualizada.status }))
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  if (erro) return <div className="p-6 text-rose-400">{erro}</div>
+  if (!sessao) return <div className="p-6 text-slate-400">Carregando…</div>
+
+  const itens = sessao.itens || []
+  const pendentes = itens.filter(i => Number(i.diferenca) !== 0 && !i.categoria_divergencia)
 
   return (
     <div className="p-6 space-y-4">
@@ -92,11 +106,11 @@ export default function SessaoDetalhe() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => exportarExcel(sessaoId, `contagem_${sessao.filial}_${sessao.periodo}.xlsx`)}
+          <button onClick={() => exportarExcel(sessao, `contagem_${sessao.filial}_${sessao.periodo}.xlsx`)}
             className="bg-emerald-800 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-sm">
             Exportar Excel
           </button>
-          <button onClick={() => exportarPDF(sessaoId, `contagem_${sessao.filial}_${sessao.periodo}.pdf`)}
+          <button onClick={() => exportarPDF(sessao, `contagem_${sessao.filial}_${sessao.periodo}.pdf`)}
             className="bg-slate-700 hover:bg-slate-600 text-white rounded-lg px-3 py-2 text-sm">
             Exportar PDF
           </button>
@@ -125,7 +139,7 @@ export default function SessaoDetalhe() {
           </thead>
           <tbody className="divide-y divide-slate-800">
             {itens.map(item => (
-              <ItemRow key={item.id} item={item} produto={produtoPorId[item.produtoId]} />
+              <ItemRow key={item.id} item={item} sessaoId={sessao.id} onAtualizado={atualizarItemLocal} />
             ))}
           </tbody>
         </table>

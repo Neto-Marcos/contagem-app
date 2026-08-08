@@ -14,7 +14,6 @@
     "start": "node scripts/start.js"
   },
   "dependencies": {
-    "dexie-react-hooks": "^4.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",
@@ -26,7 +25,6 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
     "autoprefixer": "^10.5.4",
-    "dexie": "^4.4.4",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "oxlint": "^1.75.0",

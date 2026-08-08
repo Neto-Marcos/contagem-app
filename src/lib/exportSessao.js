@@ -1,41 +1,33 @@
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { db, CAMPOS_MOVIMENTO, calcularTotal } from './db'
+import { CAMPOS_MOVIMENTO, calcularTotal } from './db'
 
-async function montarLinhas(sessaoId) {
-  const itens = await db.itens.where('sessaoId').equals(sessaoId).toArray()
-  const linhas = []
-  for (const item of itens) {
-    const produto = await db.produtos.get(item.produtoId)
-    const nfs = await db.notasFiscais.where('itemId').equals(item.id).toArray()
-    linhas.push({
-      Código: produto?.codigo ?? '',
-      Cor: produto?.cor ?? '',
-      Voltagem: produto?.voltagem ?? '',
-      Produto: produto?.descricao ?? '',
-      ...Object.fromEntries(CAMPOS_MOVIMENTO.map(c => [c.label, item[c.key] || 0])),
-      'C. Total': calcularTotal(item),
-      Saldo: produto?.saldo ?? 0,
-      Diferença: item.diferenca ?? 0,
-      Categoria: item.categoriaDivergencia || '',
-      OBS: item.observacao || '',
-      'NF vinculadas': nfs.map(n => `${n.tipo === 'entrada' ? 'Ent' : 'Sai'} ${n.numero} (${n.quantidade})`).join('; '),
-    })
-  }
-  return linhas
+function montarLinhas(sessao) {
+  return (sessao.itens || []).map((item) => ({
+    Código: item.codigo ?? '',
+    Cor: item.cor ?? '',
+    Voltagem: item.voltagem ?? '',
+    Produto: item.descricao ?? '',
+    ...Object.fromEntries(CAMPOS_MOVIMENTO.map(c => [c.label, item[c.key] || 0])),
+    'C. Total': calcularTotal(item),
+    Saldo: item.saldo ?? 0,
+    Diferença: item.diferenca ?? 0,
+    Categoria: item.categoria_divergencia || '',
+    OBS: item.observacao || '',
+  }))
 }
 
-export async function exportarExcel(sessaoId, nomeArquivo = 'contagem.xlsx') {
-  const linhas = await montarLinhas(sessaoId)
+export function exportarExcel(sessao, nomeArquivo = 'contagem.xlsx') {
+  const linhas = montarLinhas(sessao)
   const ws = XLSX.utils.json_to_sheet(linhas)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Contagem')
   XLSX.writeFile(wb, nomeArquivo)
 }
 
-export async function exportarPDF(sessaoId, nomeArquivo = 'contagem.pdf', titulo = 'Relatório de Contagem') {
-  const linhas = await montarLinhas(sessaoId)
+export function exportarPDF(sessao, nomeArquivo = 'contagem.pdf', titulo = 'Relatório de Contagem') {
+  const linhas = montarLinhas(sessao)
   const doc = new jsPDF({ orientation: 'landscape' })
   doc.setFontSize(14)
   doc.text(titulo, 14, 14)

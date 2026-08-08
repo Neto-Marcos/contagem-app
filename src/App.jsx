@@ -1,14 +1,15 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from './lib/db'
+import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { useOnline } from './lib/useOnline'
+import { AuthProvider, useAuth } from './lib/auth'
+import Login from './pages/Login'
+import Registro from './pages/Registro'
 import Importar from './pages/Importar'
 import Sessoes from './pages/Sessoes'
 import SessaoDetalhe from './pages/SessaoDetalhe'
 
 function Shell({ children }) {
   const online = useOnline()
-  const totalProdutos = useLiveQuery(() => db.produtos.count(), [])
+  const { empresa, usuario, logout } = useAuth()
 
   const linkClass = ({ isActive }) =>
     `px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -27,11 +28,13 @@ function Shell({ children }) {
             </nav>
           </div>
           <div className="flex items-center gap-3 text-xs">
-            <span className="text-slate-500">{totalProdutos ?? 0} produtos no dispositivo</span>
+            <span className="text-slate-500">{empresa?.nome}</span>
+            <span className="text-slate-500">{usuario?.nome}</span>
             <span className={`flex items-center gap-1.5 px-2 py-1 rounded-full ${online ? 'bg-emerald-950 text-emerald-300' : 'bg-amber-950 text-amber-300'}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-              {online ? 'Online' : 'Offline — funcionando normalmente'}
+              {online ? 'Online' : 'Offline'}
             </span>
+            <button onClick={logout} className="text-slate-400 hover:text-slate-200">Sair</button>
           </div>
         </div>
       </header>
@@ -40,17 +43,32 @@ function Shell({ children }) {
   )
 }
 
+function RotaProtegida({ children }) {
+  const { autenticado } = useAuth()
+  if (!autenticado) return <Navigate to="/login" replace />
+  return <Shell>{children}</Shell>
+}
+
+function Rotas() {
+  const { autenticado } = useAuth()
+  return (
+    <Routes>
+      <Route path="/login" element={autenticado ? <Navigate to="/sessoes" replace /> : <Login />} />
+      <Route path="/registro" element={autenticado ? <Navigate to="/sessoes" replace /> : <Registro />} />
+      <Route path="/" element={<RotaProtegida><Sessoes /></RotaProtegida>} />
+      <Route path="/importar" element={<RotaProtegida><Importar /></RotaProtegida>} />
+      <Route path="/sessoes" element={<RotaProtegida><Sessoes /></RotaProtegida>} />
+      <Route path="/sessoes/:id" element={<RotaProtegida><SessaoDetalhe /></RotaProtegida>} />
+    </Routes>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <Shell>
-        <Routes>
-          <Route path="/" element={<Sessoes />} />
-          <Route path="/importar" element={<Importar />} />
-          <Route path="/sessoes" element={<Sessoes />} />
-          <Route path="/sessoes/:id" element={<SessaoDetalhe />} />
-        </Routes>
-      </Shell>
+      <AuthProvider>
+        <Rotas />
+      </AuthProvider>
     </BrowserRouter>
   )
 }
