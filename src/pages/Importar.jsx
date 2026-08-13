@@ -28,18 +28,25 @@ export default function Importar() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-100">Importar saldo</h1>
         <p className="text-slate-400 mt-1 text-sm">
-          Envie a planilha Excel/CSV exportada do sistema (ERP) com o saldo atual.
-          Colunas esperadas: Filial, Código, Grade X (cor), Grade Y (voltagem),
-          Produto, Saldo, Custo Médio. Se você tem só o PDF, exporte para Excel
-          no próprio ERP antes — o layout de PDF varia demais para importar direto
-          com segurança.
+          Envie o PDF, Excel ou CSV exportado do sistema (ERP) com o saldo atual.
+          O arquivo deve conter pelo menos as colunas Código e Saldo. Também são
+          reconhecidas: Filial, Grade X (cor), Grade Y (voltagem), Produto e Custo Médio.
+        </p>
+        <p className="text-slate-500 mt-2 text-xs">
+          Para PDF, use o relatório original com texto selecionável. PDFs gerados por
+          escaneamento ou fotografia ainda não são compatíveis.
         </p>
       </div>
 
       <label className="block border-2 border-dashed border-slate-700 rounded-xl p-10 text-center cursor-pointer hover:border-sky-600 transition-colors">
-        <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
+        <input
+          type="file"
+          accept=".pdf,.xlsx,.xls,.csv,application/pdf"
+          className="hidden"
+          onChange={handleFile}
+        />
         <span className="text-slate-300">
-          {carregando ? 'Importando…' : 'Clique para selecionar o arquivo (.xlsx, .xls, .csv)'}
+          {carregando ? 'Importando…' : 'Clique para selecionar o arquivo (.pdf, .xlsx, .xls, .csv)'}
         </span>
       </label>
 

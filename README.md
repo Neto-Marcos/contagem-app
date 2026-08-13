@@ -6,7 +6,7 @@ planilha de contagem por telas com cálculo automático de diferença.
 
 ## O que já está pronto (v1 / MVP)
 
-- Importação de saldo via Excel/CSV (produto, cor, voltagem, saldo, custo médio)
+- Importação de saldo via PDF textual, Excel ou CSV (produto, cor, voltagem, saldo, custo médio)
 - Cadastro automático de produtos a partir da importação
 - Abertura de sessões de contagem por filial e período
 - Lançamento de todos os movimentos (Transferência, Licitação, Clientes,
